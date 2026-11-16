@@ -1799,17 +1799,45 @@ $("#btn-tsave").click(function () {
 // ==========================================
 
 function safeJesDec(data) {
-  try {
-    var dec = jesD.dec(data);
-    if (dec.charAt(0) === '[') return JSON.parse(dec);
-    var firstBracket = dec.indexOf('[');
-    var lastBracket = dec.lastIndexOf(']');
-    if (firstBracket !== -1 && lastBracket !== -1) {
-      return JSON.parse(dec.substring(firstBracket, lastBracket + 1));
+  if (!data) return [];
+  if (typeof data === "object") return data;
+  if (typeof data !== "string") return [];
+
+  var trimmed = data.trim();
+  if (!trimmed) return [];
+
+  // 1. Try if data is already raw JSON (endpoints echoing json_encode directly)
+  if (trimmed.charAt(0) === '[' || trimmed.charAt(0) === '{') {
+    try {
+      return JSON.parse(trimmed);
+    } catch (e) {
+      // not direct JSON, proceed to jesD decryption
     }
+  }
+
+  // 2. Decrypt with jesD (XOR 25)
+  try {
+    var dec = jesD.dec(trimmed);
+    if (!dec) return [];
+
+    // Find JSON boundaries (either array [ ... ] or object { ... })
+    var firstArray = dec.indexOf('[');
+    var firstObj = dec.indexOf('{');
+
+    if (firstArray !== -1 && (firstObj === -1 || firstArray < firstObj)) {
+      var lastArray = dec.lastIndexOf(']');
+      if (lastArray !== -1 && lastArray >= firstArray) {
+        return JSON.parse(dec.substring(firstArray, lastArray + 1));
+      }
+    } else if (firstObj !== -1 && (firstArray === -1 || firstObj < firstArray)) {
+      var lastObj = dec.lastIndexOf('}');
+      if (lastObj !== -1 && lastObj >= firstObj) {
+        return JSON.parse(dec.substring(firstObj, lastObj + 1));
+      }
+    }
+
     return JSON.parse(dec);
   } catch (err) {
-    console.error("jesD parse error:", err);
     return [];
   }
 }
@@ -2234,26 +2262,197 @@ function removeDHCPLease(id, ip) {
   }
 }
 
-// ------------------------------------------
-// 4. Quick Print
-// ------------------------------------------
+// ==========================================
+// 4. Quick Print & Package Management
+// ==========================================
 var cachedPresets = [];
-var qpColors = ['bg-blue', 'bg-green', 'bg-purple', 'bg-indigo', 'bg-teal', 'bg-pink', 'bg-cyan', 'bg-yellow'];
+var qpColors = [
+  'bg-blue', 'bg-indigo', 'bg-purple', 'bg-teal',
+  'bg-green', 'bg-pink', 'bg-cyan', 'bg-yellow'
+];
 
-function loadQuickPrint() {
-  $("#quick-print-container").html("<div class='col-12 text-center'><i class='fa fa-circle-o-notch fa-spin'></i> Loading Quick Print Presets...</div>");
+function formatBps(bits) {
+  bits = Number(bits) || 0;
+  if (bits <= 0) return "0 bps";
+  var sizes = ["bps", "kbps", "Mbps", "Gbps", "Tbps"];
+  var i = parseInt(Math.floor(Math.log(bits) / Math.log(1024)));
+  if (i < 0) i = 0;
+  if (i >= sizes.length) i = sizes.length - 1;
+  return parseFloat((bits / Math.pow(1024, i)).toFixed(2)) + " " + sizes[i];
+}
+
+function formatSchedulerInterval(str) {
+  if (!str) return "-";
+  return String(str)
+    .replace(/w/g, "w ")
+    .replace(/d/g, "d ")
+    .replace(/h/g, "h ")
+    .replace(/m/g, "m ")
+    .replace(/s/g, "s")
+    .trim();
+}
+
+function switchQpTab(tab) {
+  if (tab === "grid") {
+    $("#panel-qp-grid").removeClass("hide").show();
+    $("#panel-qp-list").hide();
+    $("#btn-tab-quick-grid, #btn-m-qp-grid").addClass("card-tab-active bg-primary").removeClass("bg-btn-group");
+    $("#btn-tab-quick-list, #btn-m-qp-list").removeClass("card-tab-active bg-primary").addClass("bg-btn-group");
+  } else {
+    $("#panel-qp-grid").hide();
+    $("#panel-qp-list").removeClass("hide").show();
+    $("#btn-tab-quick-list, #btn-m-qp-list").addClass("card-tab-active bg-primary").removeClass("bg-btn-group");
+    $("#btn-tab-quick-grid, #btn-m-qp-grid").removeClass("card-tab-active bg-primary").addClass("bg-btn-group");
+    loadQpDropdowns();
+  }
+}
+
+function loadQpDropdowns(cb) {
+  var srvDone = false;
+  var profDone = false;
+
+  if ($("#qp_server option").length <= 1) {
+    $.get(session + "/get_hotspot_server&f=true", function (data) {
+      var srvs = safeJesDec(data);
+      if (Array.isArray(srvs)) {
+        $("#qp_server").html('<option value="all">all</option>');
+        $.each(srvs, function (i, s) {
+          if (s && s.name) {
+            $("#qp_server").append('<option value="' + s.name + '">' + s.name + '</option>');
+          }
+        });
+      }
+      srvDone = true;
+      if (srvDone && profDone && typeof cb === "function") cb();
+    });
+  } else {
+    srvDone = true;
+  }
+
+  if ($("#qp_profile option").length <= 1) {
+    $.get(session + "/profiles&f=true", function (data) {
+      var profs = safeJesDec(data);
+      if (Array.isArray(profs)) {
+        $("#qp_profile, #m_qp_profile").html('<option value="">-- Select Profile --</option>');
+        $.each(profs, function (i, pr) {
+          if (pr && pr.name) {
+            $("#qp_profile, #m_qp_profile").append('<option value="' + pr.name + '">' + pr.name + '</option>');
+          }
+        });
+      }
+      profDone = true;
+      if (srvDone && profDone && typeof cb === "function") cb();
+    });
+  } else {
+    profDone = true;
+  }
+
+  if (srvDone && profDone && typeof cb === "function") cb();
+}
+
+function onQpProfileChange(profName, isMob) {
+  if (!profName) {
+    $("#qp_profile_sync_info").hide();
+    return;
+  }
+  $("#loading").html("Fetching profile details...");
+  $.get(session + "/profile&name=" + encodeURIComponent(profName), function (data) {
+    $("#loading").html("");
+    var prof = safeJesDec(data);
+    if (Array.isArray(prof) && prof[0]) {
+      var onLogin = prof[0]["on-login"] || "";
+      var parts = onLogin.split(",");
+      var price = parts[2] ? parts[2].trim() : "0";
+      var validity = parts[3] ? parts[3].trim() : "";
+      var sprice = parts[4] ? parts[4].trim() : price;
+
+      if (!isMob) {
+        if (validity) $("#qp_validity").val(validity);
+        if (price) $("#qp_price").val(price);
+        if (sprice) $("#qp_sprice").val(sprice);
+        $("#qp_profile_sync_text").html("<b>" + profName + "</b> sync &rarr; Validity: <b>" + (validity || '-') + "</b>, Price: <b>" + price + "</b>, Selling: <b>" + sprice + "</b>");
+        $("#qp_profile_sync_info").fadeIn(150);
+      } else {
+        if (validity) $("#m_qp_validity").val(validity);
+        if (price) $("#m_qp_price").val(price);
+        if (sprice) $("#m_qp_sprice").val(sprice);
+      }
+    }
+  });
+}
+
+function defQpUserl() {
+  var mode = $("#qp_usrmode").val();
+  if (mode === "vc") {
+    $("#qp_userlength").val("4");
+  } else {
+    $("#qp_userlength").val("4");
+  }
+}
+
+function openAddQpPreset() {
+  resetQpForm();
+  switchQpTab("list");
+  $("#qp_package").focus();
+}
+
+function resetQpForm() {
+  $("#qp_id").val("");
+  $("#qp_form_title").text("Add Quick Print Package");
+  $("#qp_package").val("");
+  $("#qp_prefix").val("");
+  $("#qp_char").val("mix");
+  $("#qp_timelimit").val("");
+  $("#qp_datalimit_num").val("");
+  $("#qp_datalimit_unit").val("MB");
+  $("#qp_validity").val("");
+  $("#qp_price").val("0");
+  $("#qp_sprice").val("0");
+  $("#qp_comment").val("");
+  $("#qp_usrmode").val("vc");
+  $("#qp_userlength").val("4");
+  $("#qp_profile_sync_info").hide();
+}
+
+function toggleMobileQpForm() {
+  var $w = $("#m_qp_form_wrapper");
+  if ($w.is(":visible")) {
+    $w.slideUp(200);
+    $("#m_qp_toggle_txt").text("Add New Package");
+  } else {
+    $w.slideDown(200);
+    $("#m_qp_toggle_txt").text("Hide Package Form");
+    loadQpDropdowns();
+  }
+}
+
+function loadQuickPrint(force) {
+  $("#quick-print-container").html("<div class='col-12 text-center pd-20'><i class='fa fa-circle-o-notch fa-spin'></i> Loading Quick Print Presets...</div>");
+  $("#qp_table_body").html("<tr><td colspan='13' class='text-center'><i class='fa fa-circle-o-notch fa-spin'></i> Loading packages...</td></tr>");
   $("#loading").html("Loading Quick Print...");
+
+  loadQpDropdowns();
+
   $.get(session + "/get_quick_print", function (data) {
     var presets = safeJesDec(data);
     cachedPresets = presets;
     $("#quick-print-container").html("");
+    $("#qp_table_body").html("");
+
+    var count = Array.isArray(presets) ? presets.length : 0;
+    $("#total-quickprint-grid").html(count + " Package" + (count > 1 ? "s" : ""));
+    $("#total-quickprint-table").html(count + " Package" + (count > 1 ? "s" : ""));
+
     if (!Array.isArray(presets) || presets.length === 0) {
       $("#quick-print-container").html(
-        '<div class="col-12 text-center mr-t-20">'
-        + '<p>Belum ada preset Quick Print. Buat preset paket baru untuk cetak 1-klik yang praktis!</p>'
-        + '<button class="btn bg-primary" onclick="openAddPresetModal()"><i class="fa fa-plus"></i> Buat Preset Sekarang</button>'
+        '<div class="col-12 text-center mr-t-20 pd-20">'
+        + '<div style="font-size: 48px; color: #ccc; margin-bottom: 10px;"><i class="fa fa-ticket"></i></div>'
+        + '<h3 style="color:#666;">Belum Ada Paket Quick Print</h3>'
+        + '<p class="text-muted">Buat paket preset voucher untuk proses cetak 1-klik yang cepat dan praktis.</p>'
+        + '<button class="btn bg-primary" onclick="openAddQpPreset()"><i class="fa fa-plus"></i> Tambah Paket Sekarang</button>'
         + '</div>'
       );
+      $("#qp_table_body").html("<tr><td colspan='13' class='text-center text-muted'>Belum ada paket yang tersimpan.</td></tr>");
       $("#loading").html("");
       return;
     }
@@ -2263,105 +2462,153 @@ function loadQuickPrint() {
       var prText = (currency || "Rp") + " " + Number(p.price || 0).toLocaleString();
       var sprText = (currency || "Rp") + " " + Number(p.sprice || p.price || 0).toLocaleString();
 
+      var dataLimitDisplay = "-";
+      if (p.datalimit && p.datalimit !== "0" && p.datalimit !== "") {
+        var numDl = Number(p.datalimit);
+        if (!isNaN(numDl) && numDl > 0) {
+          if (numDl >= 1073741824) {
+            dataLimitDisplay = (numDl / 1073741824).toFixed(0) + " GB";
+          } else if (numDl >= 1048576) {
+            dataLimitDisplay = (numDl / 1048576).toFixed(0) + " MB";
+          } else {
+            dataLimitDisplay = numDl + " B";
+          }
+        } else {
+          dataLimitDisplay = p.datalimit;
+        }
+      }
+
+      // 1. Grid Card View
       var cardHtml = '<div class="col-4 mr-b-15">'
-        + '<div class="box bmh-75 box-bordered ' + colorClass + '" style="border-radius:6px;position:relative;cursor:pointer;">'
+        + '<div class="box bmh-75 box-bordered ' + colorClass + '" style="border-radius:6px;position:relative;cursor:pointer;transition:transform 0.15s ease;" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">'
         + '<div style="position:absolute;top:8px;right:8px;z-index:10;">'
-        + '<span class="pointer text-white" title="Edit Preset" onclick="event.stopPropagation();editQuickPreset(\'' + p.id + '\')"><i class="fa fa-edit"></i></span>&nbsp;&nbsp;'
-        + '<span class="pointer text-white" title="Delete Preset" onclick="event.stopPropagation();deleteQuickPreset(\'' + p.id + '\',\'' + p.package + '\')"><i class="fa fa-trash"></i></span>'
+        + '<span class="pointer text-white" title="Edit Package" onclick="event.stopPropagation();editQuickPreset(\'' + p.id + '\')"><i class="fa fa-edit"></i></span>&nbsp;&nbsp;'
+        + '<span class="pointer text-white" title="Delete Package" onclick="event.stopPropagation();deleteQuickPreset(\'' + p.id + '\',\'' + p.package + '\')"><i class="fa fa-trash"></i></span>'
         + '</div>'
         + '<div class="box-group" onclick="executeQuickPrint(\'' + p.id + '\')">'
         + '<div class="box-group-icon"><i class="fa fa-print"></i></div>'
         + '<div class="box-group-area">'
-        + '<h3 style="margin-top:0;">' + p.package + '</h3>'
-        + '<span><b>Profile:</b> ' + p.profile + '<br>'
-        + '<b>Validity:</b> ' + (p.validity || '-') + ' | <b>Time:</b> ' + (p.timelimit || '-') + '<br>'
-        + '<b>Data Limit:</b> ' + (p.datalimit || '-') + '<br>'
-        + '<b>Price:</b> ' + prText + ' | <b>Selling:</b> ' + sprText + '</span>'
+        + '<h3 style="margin-top:0;font-size:16px;">Package : <b>' + p.package + '</b></h3>'
+        + '<span style="font-size:12px;line-height:1.5;">'
+        + 'Time Limit : <b>' + (p.timelimit || '-') + '</b> | Data Limit : <b>' + dataLimitDisplay + '</b><br>'
+        + 'Validity : <b>' + (p.validity || '-') + '</b> | Price : <b>' + prText + '</b> | Selling : <b>' + sprText + '</b>'
+        + '</span>'
         + '</div>'
         + '</div>'
         + '</div>'
         + '</div>';
       $("#quick-print-container").append(cardHtml);
+
+      // 2. Table Row View
+      var actionBtns = '<span class="text-primary pointer" title="Edit ' + p.package + '" onclick="editQuickPreset(\'' + p.id + '\')"><i class="fa fa-edit"></i></span>&nbsp;&nbsp;'
+        + '<span class="text-danger pointer" title="Remove ' + p.package + '" onclick="deleteQuickPreset(\'' + p.id + '\',\'' + p.package + '\')"><i class="fa fa-minus-square"></i></span>';
+
+      var tableRow = '<tr class="yes">'
+        + '<td style="text-align:center;">' + actionBtns + '</td>'
+        + '<td><b>' + p.package + '</b></td>'
+        + '<td>' + (p.server || 'all') + '</td>'
+        + '<td>' + (p.usermode === 'up' ? 'User & Pass' : 'User = Pass') + '</td>'
+        + '<td>' + (p.userlength || '4') + '</td>'
+        + '<td>' + (p.prefix || '-') + '</td>'
+        + '<td><span class="badge bg-btn-group">' + (p.profile || 'default') + '</span></td>'
+        + '<td>' + (p.timelimit || '-') + '</td>'
+        + '<td>' + dataLimitDisplay + '</td>'
+        + '<td>' + (p.validity || '-') + '</td>'
+        + '<td>' + prText + '</td>'
+        + '<td>' + sprText + '</td>'
+        + '<td>' + (p.comment || '-') + '</td>'
+        + '</tr>';
+      $("#qp_table_body").append(tableRow);
     });
+
     $("#loading").html("");
+    $(".quickprint-table").fancyTable({
+      inputId: "searchQp",
+      sortColumn: 1,
+      pagination: true,
+      perPage: 15,
+      globalSearch: true
+    });
   });
-}
-
-function openAddPresetModal(p) {
-  $("#qp_id").val(p ? p.id : "");
-  $("#qp_modal_title").text(p ? "Edit Preset Package" : "Add Preset Package");
-  $("#qp_package").val(p ? p.package : "");
-  $("#qp_prefix").val(p ? p.prefix : "");
-  $("#qp_char").val(p ? p.char : "mix");
-  $("#qp_timelimit").val(p ? p.timelimit : "");
-  $("#qp_datalimit").val(p ? p.datalimit : "");
-  $("#qp_validity").val(p ? p.validity : "");
-  $("#qp_price").val(p ? p.price : "0");
-  $("#qp_sprice").val(p ? p.sprice : "0");
-  $("#qp_comment").val(p ? p.comment : "");
-  $("#qp_usrmode").val(p ? p.usermode : "vc");
-  $("#qp_userlength").val(p ? p.userlength : "4");
-
-  if ($("#qp_server option").length <= 1) {
-    $.get(session + "/get_hotspot_server", function (data) {
-      var srvs = safeJesDec(data);
-      if (Array.isArray(srvs)) {
-        $("#qp_server").html('<option value="all">all</option>');
-        $.each(srvs, function (i, s) {
-          $("#qp_server").append('<option value="' + s.name + '">' + s.name + '</option>');
-        });
-        if (p && p.server) $("#qp_server").val(p.server);
-      }
-    });
-  } else if (p && p.server) {
-    $("#qp_server").val(p.server);
-  }
-
-  if ($("#qp_profile option").length === 0) {
-    $.get(session + "/profiles", function (data) {
-      var profs = safeJesDec(data);
-      if (Array.isArray(profs)) {
-        $("#qp_profile").html("");
-        $.each(profs, function (i, pr) {
-          $("#qp_profile").append('<option value="' + pr.name + '">' + pr.name + '</option>');
-        });
-        if (p && p.profile) $("#qp_profile").val(p.profile);
-      }
-    });
-  } else if (p && p.profile) {
-    $("#qp_profile").val(p.profile);
-  }
-
-  $("#modal_quick_preset").show();
 }
 
 function editQuickPreset(id) {
   var p = cachedPresets.find(function (item) { return item.id === id; });
-  if (p) {
-    openAddPresetModal(p);
+  if (!p) return;
+
+  switchQpTab("list");
+  $("#qp_id").val(p.id);
+  $("#qp_form_title").text("Edit Quick Print Package (" + p.package + ")");
+  $("#qp_package").val(p.package);
+  $("#qp_server").val(p.server || "all");
+  $("#qp_usrmode").val(p.usermode || "vc");
+  $("#qp_userlength").val(p.userlength || "4");
+  $("#qp_prefix").val(p.prefix || "");
+  $("#qp_char").val(p.char || "mix");
+  $("#qp_profile").val(p.profile || "default");
+  $("#qp_timelimit").val(p.timelimit || "");
+
+  var dl = p.datalimit || "";
+  if (dl !== "" && dl !== "0") {
+    var numDl = Number(dl);
+    if (!isNaN(numDl) && numDl > 0) {
+      if (numDl % 1073741824 === 0) {
+        $("#qp_datalimit_num").val(numDl / 1073741824);
+        $("#qp_datalimit_unit").val("GB");
+      } else {
+        $("#qp_datalimit_num").val((numDl / 1048576).toFixed(0));
+        $("#qp_datalimit_unit").val("MB");
+      }
+    } else {
+      $("#qp_datalimit_num").val(dl.replace(/[^0-9]/g, ""));
+      $("#qp_datalimit_unit").val(dl.toUpperCase().indexOf("G") >= 0 ? "GB" : "MB");
+    }
+  } else {
+    $("#qp_datalimit_num").val("");
   }
+
+  $("#qp_validity").val(p.validity || "");
+  $("#qp_price").val(p.price || "0");
+  $("#qp_sprice").val(p.sprice || p.price || "0");
+  $("#qp_comment").val(p.comment || "");
+
+  $("#qp_profile_sync_text").html("Editing <b>" + p.package + "</b> &rarr; Profile: <b>" + p.profile + "</b>");
+  $("#qp_profile_sync_info").show();
 }
 
 function saveQuickPreset() {
   var id = $("#qp_id").val();
-  var pkg = $("#qp_package").val().trim();
+  var pkg = $("#qp_package").val() ? $("#qp_package").val().trim() : "";
+  if (!pkg && $("#m_qp_package").length) {
+    pkg = $("#m_qp_package").val().trim();
+  }
   if (!pkg) {
     alert("Please enter package name!");
     return;
   }
-  var srv = $("#qp_server").val();
-  var prof = $("#qp_profile").val();
-  var usrmode = $("#qp_usrmode").val();
-  var userl = $("#qp_userlength").val();
-  var pfx = $("#qp_prefix").val().trim();
-  var char = $("#qp_char").val();
-  var timelimit = $("#qp_timelimit").val().trim();
-  var datalimit = $("#qp_datalimit").val().trim();
-  var validity = $("#qp_validity").val().trim();
-  var price = $("#qp_price").val().trim();
-  var sprice = $("#qp_sprice").val().trim();
-  var comm = $("#qp_comment").val().trim();
 
+  var srv = $("#qp_server").val() || "all";
+  var prof = $("#qp_profile").val() || $("#m_qp_profile").val() || "default";
+  var usrmode = $("#qp_usrmode").val() || $("#m_qp_usrmode").val() || "vc";
+  var userl = $("#qp_userlength").val() || "4";
+  var pfx = $("#qp_prefix").val() ? $("#qp_prefix").val().trim() : "";
+  var char = $("#qp_char").val() || "mix";
+  var timelimit = $("#qp_timelimit").val() ? $("#qp_timelimit").val().trim() : ($("#m_qp_timelimit").val() || "");
+
+  var datalimit = "";
+  var dlNum = $("#qp_datalimit_num").val() || $("#m_qp_datalimit_num").val() || "";
+  var dlUnit = $("#qp_datalimit_unit").val() || "MB";
+  if (dlNum !== "" && Number(dlNum) > 0) {
+    var multiplier = dlUnit === "GB" ? 1073741824 : 1048576;
+    datalimit = String(Number(dlNum) * multiplier);
+  }
+
+  var validity = $("#qp_validity").val() ? $("#qp_validity").val().trim() : ($("#m_qp_validity").val() || "");
+  var price = $("#qp_price").val() ? $("#qp_price").val().trim() : ($("#m_qp_price").val() || "0");
+  var sprice = $("#qp_sprice").val() ? $("#qp_sprice").val().trim() : ($("#m_qp_sprice").val() || price);
+  var comm = $("#qp_comment").val() ? $("#qp_comment").val().trim() : "";
+
+  $("#loading").html("Saving package preset...");
   $.ajax({
     type: "POST",
     url: "./post/post_quick_print.php",
@@ -2386,18 +2633,25 @@ function saveQuickPreset() {
     },
     dataType: "json",
     success: function (res) {
+      $("#loading").html("");
       if (res.message === "success") {
-        $("#modal_quick_preset").hide();
+        resetQpForm();
+        switchQpTab("grid");
         loadQuickPrint();
       } else {
         alert("Failed to save preset: " + (res.message || "Error"));
       }
+    },
+    error: function () {
+      $("#loading").html("");
+      alert("Error contacting server while saving preset.");
     }
   });
 }
 
 function deleteQuickPreset(id, name) {
   if (confirm("Are you sure you want to delete preset [" + name + "]?")) {
+    $("#loading").html("Deleting preset...");
     $.ajax({
       type: "POST",
       url: "./post/post_quick_print.php",
@@ -2408,11 +2662,16 @@ function deleteQuickPreset(id, name) {
       },
       dataType: "json",
       success: function (res) {
+        $("#loading").html("");
         if (res.message === "success") {
           loadQuickPrint();
         } else {
-          alert("Failed to delete preset");
+          alert("Failed to delete preset: " + (res.message || "Error"));
         }
+      },
+      error: function () {
+        $("#loading").html("");
+        alert("Error contacting server while deleting preset.");
       }
     });
   }
@@ -2448,7 +2707,7 @@ function executeQuickPrint(id) {
       $("#loading").html("");
       if (res.message === "success") {
         var comm = p.usermode + "-" + gencode + "-" + res.data.date + "-" + (p.comment || "");
-        var printUrl = session + "/print&vcr=" + encodeURIComponent(comm) + "&prof=" + encodeURIComponent(p.profile) + "&mode=s";
+        var printUrl = session + "/print&c=" + encodeURIComponent(comm) + "&s";
         window.open(printUrl, "_blank");
       } else {
         alert("Failed to generate voucher: " + (res.data ? res.data.error : res.message));
@@ -2543,33 +2802,46 @@ function openGenerateForProfile(profName) {
 }
 
 // ------------------------------------------
-// 6. Traffic Monitor (Full Page)
+// 6. Traffic Monitor (Real-time with Highcharts)
 // ------------------------------------------
 var fullTrafficChart = null;
 var fullTrafficTimer = null;
 
-function initTrafficPage() {
+function initTrafficPage(force) {
   $("#loading").html("Loading interfaces...");
+
   $.get(session + "/get_interface", function (data) {
     var ifaces = safeJesDec(data);
     $("#traffic_iface_select").html('<option value="">-- Select Interface --</option>');
-    if (Array.isArray(ifaces)) {
+
+    var storedIface = localStorage.getItem(session + "_traffic_iface");
+    var ifaceExists = false;
+
+    if (Array.isArray(ifaces) && ifaces.length > 0) {
       $.each(ifaces, function (i, ifc) {
         var nm = ifc.name;
-        $("#traffic_iface_select").append('<option value="' + nm + '">' + nm + ' (' + (ifc.type || 'ether') + ')</option>');
+        var type = ifc.type || 'ether';
+        var isSelected = (storedIface && storedIface === nm);
+        if (isSelected) ifaceExists = true;
+        $("#traffic_iface_select").append(
+          '<option value="' + nm + '"' + (isSelected ? ' selected' : '') + '>[' + (i + 1) + '] ' + nm + ' (' + type + ')</option>'
+        );
       });
-      if (ifaces.length > 0) {
-        var first = ifaces[0].name;
-        $("#traffic_iface_select").val(first);
-        startTrafficMonitor(first);
-      }
+
+      var activeIface = ifaceExists ? storedIface : ifaces[0].name;
+      $("#traffic_iface_select").val(activeIface);
+      localStorage.setItem(session + "_traffic_iface", activeIface);
+      startTrafficMonitor(activeIface);
+    } else {
+      $("#traffic_iface_select").html('<option value="">No interfaces found</option>');
     }
     $("#loading").html("");
   });
 
-  $("#traffic_iface_select").on("change", function () {
+  $("#traffic_iface_select").off("change").on("change", function () {
     var val = $(this).val();
     if (val) {
+      localStorage.setItem(session + "_traffic_iface", val);
       startTrafficMonitor(val);
     } else {
       if (fullTrafficTimer) clearInterval(fullTrafficTimer);
@@ -2580,6 +2852,29 @@ function initTrafficPage() {
 function startTrafficMonitor(iface) {
   if (fullTrafficTimer) clearInterval(fullTrafficTimer);
 
+  var activeTheme = localStorage.getItem(session + "_theme") || "light";
+  if (typeof Highcharts !== "undefined") {
+    if (activeTheme === "light" && typeof light !== "undefined") Highcharts.setOptions(light);
+    else if (activeTheme === "dark" && typeof dark !== "undefined") Highcharts.setOptions(dark);
+    else if (activeTheme === "blue" && typeof blue !== "undefined") Highcharts.setOptions(blue);
+    else if (activeTheme === "green" && typeof green !== "undefined") Highcharts.setOptions(green);
+    else if (activeTheme === "pink" && typeof pink !== "undefined") Highcharts.setOptions(pink);
+
+    Highcharts.setOptions({
+      global: { useUTC: false }
+    });
+
+    Highcharts.addEvent(Highcharts.Series, "afterInit", function () {
+      this.symbolUnicode = {
+        circle: "●",
+        diamond: "♦",
+        square: "■",
+        triangle: "▲",
+        "triangle-down": "▼"
+      }[this.symbol] || "●";
+    });
+  }
+
   fullTrafficChart = new Highcharts.Chart({
     chart: {
       renderTo: "fullTrafficChart",
@@ -2589,7 +2884,10 @@ function startTrafficMonitor(iface) {
         load: function () {}
       }
     },
-    title: { text: "Real-time Traffic: " + iface },
+    title: {
+      text: "Interface: " + iface,
+      style: { fontWeight: "bold" }
+    },
     xAxis: {
       type: "datetime",
       tickPixelInterval: 150,
@@ -2598,12 +2896,43 @@ function startTrafficMonitor(iface) {
     yAxis: {
       minPadding: 0.2,
       maxPadding: 0.2,
-      title: { text: "Bandwidth (bps)", margin: 10 }
+      title: { text: null },
+      labels: {
+        formatter: function () {
+          var bytes = this.value;
+          if (bytes === 0) return "0 bps";
+          var sizes = ["bps", "kbps", "Mbps", "Gbps", "Tbps"];
+          var i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
+          if (i < 0) i = 0;
+          if (i >= sizes.length) i = sizes.length - 1;
+          return parseFloat((bytes / Math.pow(1024, i)).toFixed(2)) + " " + sizes[i];
+        }
+      }
     },
     series: [
-      { name: "TX (Upload)", data: [] },
-      { name: "RX (Download)", data: [] }
-    ]
+      { name: "Tx", data: [], marker: { symbol: "circle" } },
+      { name: "Rx", data: [], marker: { symbol: "circle" } }
+    ],
+    tooltip: {
+      shared: true,
+      formatter: function () {
+        var s = [];
+        $.each(this.points, function (i, point) {
+          var y = point.y;
+          var valFormatted = "0 bps";
+          if (y > 0) {
+            var sizes = ["bps", "kbps", "Mbps", "Gbps", "Tbps"];
+            var idx = parseInt(Math.floor(Math.log(y) / Math.log(1024)));
+            if (idx >= sizes.length) idx = sizes.length - 1;
+            valFormatted = parseFloat((y / Math.pow(1024, idx)).toFixed(2)) + " " + sizes[idx];
+          }
+          s.push('<span style="color:' + point.series.color + '; font-size: 1.3em;">' + (point.series.symbolUnicode || '●') + '</span> <b>' + point.series.name + ':</b> ' + valFormatted);
+        });
+        return "<b>Mikhmon Traffic Monitor</b><br/><b>Time: </b>"
+          + Highcharts.dateFormat("%H:%M:%S", new Date(this.x))
+          + "<br/>" + s.join("<br/>");
+      }
+    }
   });
 
   function poll() {
@@ -2612,16 +2941,20 @@ function startTrafficMonitor(iface) {
       dataType: "json",
       success: function (data) {
         if (data && fullTrafficChart && fullTrafficChart.series && fullTrafficChart.series.length >= 2) {
-          var tx = parseInt(data.tx) || 0;
-          var rx = parseInt(data.rx) || 0;
+          var tx = 0, rx = 0;
+          if (Array.isArray(data)) {
+            tx = parseInt(data[0] && data[0].data ? data[0].data[0] : 0) || 0;
+            rx = parseInt(data[1] && data[1].data ? data[1].data[0] : 0) || 0;
+          } else if (typeof data === "object") {
+            tx = parseInt(data.tx) || 0;
+            rx = parseInt(data.rx) || 0;
+          }
+
           var x = new Date().getTime();
           var shift = fullTrafficChart.series[0].data.length > 25;
 
           fullTrafficChart.series[0].addPoint([x, tx], true, shift);
           fullTrafficChart.series[1].addPoint([x, rx], true, shift);
-
-          $("#live_tx_rate").html(formatBytes(tx) + "ps");
-          $("#live_rx_rate").html(formatBytes(rx) + "ps");
         }
       }
     });
@@ -2632,29 +2965,45 @@ function startTrafficMonitor(iface) {
 }
 
 // ------------------------------------------
-// 7. System Tools (Scheduler, Reboot, Shutdown)
+// 7. System Tools (Scheduler, Reboot, Shutdown, Resource)
 // ------------------------------------------
 function switchSystemTab(tab) {
   if (tab === "schedulers") {
     $("#panel-schedulers").removeClass("hide").show();
     $("#panel-power").hide();
-    $("#btn-tab-schedulers").addClass("card-tab-active");
-    $("#btn-tab-power").removeClass("card-tab-active");
-  } else {
+    $("#panel-sysinfo").hide();
+    $("#btn-tab-schedulers, #btn-m-tab-schedulers").addClass("card-tab-active bg-primary").removeClass("bg-btn-group");
+    $("#btn-tab-power, #btn-m-tab-power").removeClass("card-tab-active bg-primary").addClass("bg-btn-group");
+    $("#btn-tab-sysinfo, #btn-m-tab-sysinfo").removeClass("card-tab-active bg-primary").addClass("bg-btn-group");
+  } else if (tab === "power") {
     $("#panel-schedulers").hide();
     $("#panel-power").removeClass("hide").show();
-    $("#btn-tab-power").addClass("card-tab-active");
-    $("#btn-tab-schedulers").removeClass("card-tab-active");
+    $("#panel-sysinfo").hide();
+    $("#btn-tab-power, #btn-m-tab-power").addClass("card-tab-active bg-primary").removeClass("bg-btn-group");
+    $("#btn-tab-schedulers, #btn-m-tab-schedulers").removeClass("card-tab-active bg-primary").addClass("bg-btn-group");
+    $("#btn-tab-sysinfo, #btn-m-tab-sysinfo").removeClass("card-tab-active bg-primary").addClass("bg-btn-group");
+  } else if (tab === "sysinfo") {
+    $("#panel-schedulers").hide();
+    $("#panel-power").hide();
+    $("#panel-sysinfo").removeClass("hide").show();
+    $("#btn-tab-sysinfo, #btn-m-tab-sysinfo").addClass("card-tab-active bg-primary").removeClass("bg-btn-group");
+    $("#btn-tab-schedulers, #btn-m-tab-schedulers").removeClass("card-tab-active bg-primary").addClass("bg-btn-group");
+    $("#btn-tab-power, #btn-m-tab-power").removeClass("card-tab-active bg-primary").addClass("bg-btn-group");
+    loadSystemResource();
   }
 }
 
-function loadSchedulers() {
-  $("#schedulers").fadeOut(200).html("");
+function loadSchedulers(force) {
+  $("#schedulers").fadeOut(150).html("");
   $("#loading").html("Loading Schedulers...");
+  $("#fr-schedulers").addClass("fa-spin");
+
   $.get(session + "/get_schedulers", function (data) {
+    $("#fr-schedulers").removeClass("fa-spin");
     var list = safeJesDec(data);
     var count = 0;
     $("#schedulers").html("");
+
     if (Array.isArray(list)) {
       count = list.length;
       $.each(list, function (idx, s) {
@@ -2662,46 +3011,47 @@ function loadSchedulers() {
         var name = s.name || "";
         var startD = s["start-date"] || "";
         var startT = s["start-time"] || "";
-        var interval = s.interval || "";
+        var interval = formatSchedulerInterval(s.interval || "");
         var nextRun = s["next-run"] || "";
         var runCount = s["run-count"] || "0";
         var comment = s.comment || "";
         var disabled = s.disabled === "true";
 
         var toggleBtn = disabled
-          ? '<span class="text-warning pointer" title="Enable Scheduler" onclick="toggleScheduler(\'' + id + '\',\'true\')"><i class="fa fa-lock"></i></span>'
-          : '<span class="text-green pointer" title="Disable Scheduler" onclick="toggleScheduler(\'' + id + '\',\'false\')"><i class="fa fa-unlock"></i></span>';
+          ? '<span class="text-warning pointer" title="Enable Scheduler ' + name + '" onclick="toggleScheduler(\'' + id + '\',\'true\')"><i class="fa fa-lock" style="font-size:16px;"></i></span>'
+          : '<span class="text-green pointer" title="Disable Scheduler ' + name + '" onclick="toggleScheduler(\'' + id + '\',\'false\')"><i class="fa fa-unlock" style="font-size:16px;"></i></span>';
 
-        var removeBtn = '<span class="text-danger pointer" title="Remove Scheduler" onclick="removeScheduler(\'' + id + '\',\'' + name + '\')"><i class="fa fa-minus-square"></i></span>';
+        var removeBtn = '<span class="text-danger pointer" title="Remove ' + name + '" onclick="removeScheduler(\'' + id + '\',\'' + name + '\')"><i class="fa fa-minus-square" style="font-size:16px;"></i></span>';
 
         if (isMobile()) {
-          var mobHtml = '<tr class="yes"><td><div class="box-mobile">'
-            + '<b>Name:</b> ' + name + '<br>'
-            + '<b>Status:</b> ' + (disabled ? '<span class="text-danger">Disabled</span>' : '<span class="text-success">Active</span>') + '<br>'
-            + '<b>Interval:</b> ' + interval + ' | <b>Next Run:</b> ' + nextRun + '<br>'
-            + '<b>Runs:</b> ' + runCount + '<br>'
-            + '<b>Comment:</b> ' + comment + '<br>'
-            + '<div class="mr-t-5">' + removeBtn + '&nbsp;&nbsp;' + toggleBtn + '</div>'
+          var mobHtml = '<tr class="yes"><td><div class="box-mobile" style="margin-bottom:8px;">'
+            + '<div style="float:right;">' + removeBtn + '&nbsp;&nbsp;' + toggleBtn + '</div>'
+            + '<b>' + name + '</b><br>'
+            + '<small>Status: ' + (disabled ? '<span class="text-danger font-bold">Disabled</span>' : '<span class="text-green font-bold">Active</span>') + '</small><br>'
+            + '<small>Interval: <b>' + interval + '</b> | Next: ' + nextRun + '</small><br>'
+            + '<small>Runs: ' + runCount + ' | Comment: ' + (comment || '-') + '</small>'
             + '</div></td></tr>';
           $("#schedulers").append(mobHtml);
         } else {
           var row = '<tr class="yes">'
-            + '<td style="text-align:center;">' + removeBtn + '&nbsp;&nbsp;' + toggleBtn + '</td>'
-            + '<td>' + name + '</td>'
+            + '<td style="text-align:center;">' + removeBtn + '&nbsp;&nbsp;&nbsp;' + toggleBtn + '</td>'
+            + '<td><b>' + name + '</b></td>'
             + '<td>' + startD + '</td>'
             + '<td>' + startT + '</td>'
             + '<td>' + interval + '</td>'
             + '<td>' + nextRun + '</td>'
             + '<td>' + runCount + '</td>'
-            + '<td>' + comment + '</td>'
+            + '<td>' + (comment || '-') + '</td>'
             + '</tr>';
           $("#schedulers").append(row);
         }
       });
     }
-    $("#schedulers").fadeIn(200);
+
+    $("#schedulers").fadeIn(150);
     $("#total-schedulers").html(count + " Item" + (count > 1 ? "s" : ""));
     $("#loading").html("");
+
     $(".system-schedulers").fancyTable({
       inputId: "searchSchedulers",
       sortColumn: 1,
@@ -2714,6 +3064,7 @@ function loadSchedulers() {
 
 function toggleScheduler(id, disabled) {
   var nextState = disabled === "true" ? "no" : "yes";
+  $("#loading").html("Updating scheduler...");
   $.ajax({
     type: "POST",
     url: "./post/post_scheduler.php",
@@ -2725,17 +3076,23 @@ function toggleScheduler(id, disabled) {
     },
     dataType: "json",
     success: function (res) {
+      $("#loading").html("");
       if (res.message === "success") {
         loadSchedulers();
       } else {
-        alert("Failed to toggle scheduler");
+        alert("Failed to toggle scheduler: " + (res.message || "Error"));
       }
+    },
+    error: function () {
+      $("#loading").html("");
+      alert("Error contacting server while toggling scheduler.");
     }
   });
 }
 
 function removeScheduler(id, name) {
   if (confirm("Are you sure you want to remove scheduler [" + name + "]?")) {
+    $("#loading").html("Removing scheduler...");
     $.ajax({
       type: "POST",
       url: "./post/post_scheduler.php",
@@ -2746,21 +3103,133 @@ function removeScheduler(id, name) {
       },
       dataType: "json",
       success: function (res) {
+        $("#loading").html("");
         if (res.message === "success") {
           loadSchedulers();
         } else {
-          alert("Failed to remove scheduler");
+          alert("Failed to remove scheduler: " + (res.message || "Error"));
         }
+      },
+      error: function () {
+        $("#loading").html("");
+        alert("Error contacting server while removing scheduler.");
       }
     });
   }
+}
+
+function loadSystemResource() {
+  $("#sysinfo_container").html("<div class='col-12 text-center pd-20'><i class='fa fa-circle-o-notch fa-spin'></i> Loading System Resources...</div>");
+  $("#loading").html("Loading system resources...");
+
+  $.get(session + "/get_sys_resource", function (data) {
+    $("#loading").html("");
+    var res = safeJesDec(data);
+    var r = null;
+    if (res && typeof res === "object") {
+      if (res.resource && typeof res.resource === "object") {
+        r = res.resource;
+      } else if (Array.isArray(res) && res.length > 0) {
+        r = res[0];
+      } else if (!Array.isArray(res)) {
+        r = res;
+      }
+    }
+
+    if (!r || typeof r !== "object") {
+      $("#sysinfo_container").html("<div class='col-12 text-center text-danger pd-20'><i class='fa fa-exclamation-triangle'></i> Failed to load system resources.</div>");
+      return;
+    }
+
+    var uptime = r["uptime"] || "-";
+    var version = r["version"] || "-";
+    var platform = r["platform"] || "MikroTik";
+    var boardName = (res && res.model) || r["board-name"] || "-";
+    var identity = (res && res.identity) ? " (" + res.identity + ")" : "";
+    var arch = r["architecture-name"] || "-";
+    var cpu = r["cpu"] || "-";
+    var cpuCount = r["cpu-count"] || "1";
+    var cpuFreq = r["cpu-frequency"] ? r["cpu-frequency"] + " MHz" : "-";
+    var cpuLoad = parseInt(r["cpu-load"]) || 0;
+
+    var totalMem = parseInt(r["total-memory"]) || 0;
+    var freeMem = parseInt(r["free-memory"]) || 0;
+    var usedMem = Math.max(0, totalMem - freeMem);
+    var memPct = totalMem > 0 ? Math.round((usedMem / totalMem) * 100) : 0;
+
+    var totalHdd = parseInt(r["total-hdd-space"]) || 0;
+    var freeHdd = parseInt(r["free-hdd-space"]) || 0;
+    var usedHdd = Math.max(0, totalHdd - freeHdd);
+    var hddPct = totalHdd > 0 ? Math.round((usedHdd / totalHdd) * 100) : 0;
+    var badBlocks = r["bad-blocks"] || "0%";
+
+    var html = '<div class="col-6 col-m-12 mr-b-15">'
+      + '<div class="card box-bordered pd-15">'
+      + '<h4 style="margin:0 0 10px 0; border-bottom: 1px solid #eee; padding-bottom:5px;"><i class="fa fa-server text-primary"></i> Router Board &amp; OS</h4>'
+      + '<table class="table" style="font-size:13px; margin:0;">'
+      + '<tr><td style="width:40%;"><b>Board / Identity:</b></td><td><b>' + boardName + '</b>' + identity + '</td></tr>'
+      + '<tr><td><b>Architecture:</b></td><td>' + arch + ' (' + platform + ')</td></tr>'
+      + '<tr><td><b>RouterOS Version:</b></td><td><span class="badge bg-primary">' + version + '</span></td></tr>'
+      + '<tr><td><b>Uptime:</b></td><td><b>' + uptime + '</b></td></tr>'
+      + '</table>'
+      + '</div>'
+      + '</div>'
+
+      + '<div class="col-6 col-m-12 mr-b-15">'
+      + '<div class="card box-bordered pd-15">'
+      + '<h4 style="margin:0 0 10px 0; border-bottom: 1px solid #eee; padding-bottom:5px;"><i class="fa fa-microchip text-warning"></i> CPU Resource</h4>'
+      + '<table class="table" style="font-size:13px; margin:0;">'
+      + '<tr><td style="width:40%;"><b>CPU Model:</b></td><td>' + cpu + ' (' + cpuCount + ' core' + (cpuCount > 1 ? 's' : '') + ')</td></tr>'
+      + '<tr><td><b>Frequency:</b></td><td>' + cpuFreq + '</td></tr>'
+      + '<tr><td><b>CPU Load:</b></td><td>'
+      + '<b>' + cpuLoad + '%</b>'
+      + '<div style="background:#e0e0e0; border-radius:3px; height:8px; overflow:hidden; margin-top:4px;">'
+      + '<div style="background:' + (cpuLoad > 80 ? '#f44336' : (cpuLoad > 50 ? '#ff9800' : '#4caf50')) + '; width:' + cpuLoad + '%; height:100%;"></div>'
+      + '</div>'
+      + '</td></tr>'
+      + '</table>'
+      + '</div>'
+      + '</div>'
+
+      + '<div class="col-6 col-m-12 mr-b-15">'
+      + '<div class="card box-bordered pd-15">'
+      + '<h4 style="margin:0 0 10px 0; border-bottom: 1px solid #eee; padding-bottom:5px;"><i class="fa fa-tasks text-teal"></i> Memory (RAM)</h4>'
+      + '<table class="table" style="font-size:13px; margin:0;">'
+      + '<tr><td style="width:40%;"><b>Usage:</b></td><td><b>' + formatBytes(usedMem) + ' / ' + formatBytes(totalMem) + ' (' + memPct + '%)</b></td></tr>'
+      + '<tr><td><b>Free Memory:</b></td><td>' + formatBytes(freeMem) + '</td></tr>'
+      + '<tr><td colspan=\"2\">'
+      + '<div style="background:#e0e0e0; border-radius:3px; height:10px; overflow:hidden;">'
+      + '<div style="background:' + (memPct > 85 ? '#f44336' : '#009688') + '; width:' + memPct + '%; height:100%;"></div>'
+      + '</div>'
+      + '</td></tr>'
+      + '</table>'
+      + '</div>'
+      + '</div>'
+
+      + '<div class="col-6 col-m-12 mr-b-15">'
+      + '<div class="card box-bordered pd-15">'
+      + '<h4 style="margin:0 0 10px 0; border-bottom: 1px solid #eee; padding-bottom:5px;"><i class="fa fa-hdd-o text-indigo"></i> Storage (HDD / NAND)</h4>'
+      + '<table class="table" style="font-size:13px; margin:0;">'
+      + '<tr><td style="width:40%;"><b>Usage:</b></td><td><b>' + formatBytes(usedHdd) + ' / ' + formatBytes(totalHdd) + ' (' + hddPct + '%)</b></td></tr>'
+      + '<tr><td><b>Free HDD:</b></td><td>' + formatBytes(freeHdd) + ' | Bad Blocks: ' + badBlocks + '</td></tr>'
+      + '<tr><td colspan=\"2\">'
+      + '<div style="background:#e0e0e0; border-radius:3px; height:10px; overflow:hidden;">'
+      + '<div style="background:' + (hddPct > 85 ? '#f44336' : '#3f51b5') + '; width:' + hddPct + '%; height:100%;"></div>'
+      + '</div>'
+      + '</td></tr>'
+      + '</table>'
+      + '</div>'
+      + '</div>';
+
+    $("#sysinfo_container").html(html);
+  });
 }
 
 function confirmRouterPower(action) {
   var actTitle = action === "reboot" ? "REBOOT" : "SHUTDOWN";
   var promptMsg = "PERINGATAN: Apakah Anda yakin ingin melakukan " + actTitle + " pada router MikroTik?";
   if (confirm(promptMsg)) {
-    if (confirm("Konfirmasi Terakhir: Router akan segera di-" + action + ". Lanjutkan?")) {
+    if (confirm("Konfirmasi Terakhir: Router akan segera di-" + action + ". Semua koneksi aktif akan terputus. Lanjutkan?")) {
       $("#loading").html("Executing " + action + "...");
       $.ajax({
         type: "POST",

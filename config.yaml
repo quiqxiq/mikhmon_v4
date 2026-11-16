@@ -1,0 +1,49 @@
+# ==========================================
+# Mikhmon V4 Configuration Specification
+# ==========================================
+app:
+  name: "Mikhmon V4 Hotspot Management"
+  version: "4.0.0"
+  env: "production"
+  port: 8080
+  timezone: "Asia/Jakarta"
+  default_currency: "Rp"
+  session_timeout: 3600
+
+# Quick Print Default Preset Settings
+quick_print:
+  default_user_mode: "vc"        # 'vc' = User is Password, 'up' = Username & Password
+  default_user_length: 4
+  default_character_set: "mix"   # 'mix', 'lower', 'upper', 'upplow', 'num'
+  default_server: "all"
+  voucher_template: "small"      # 'default', 'small', 'thermal'
+  auto_sync_on_login: true
+
+# Traffic Monitor Settings
+traffic_monitor:
+  polling_interval_ms: 2000
+  buffer_points: 30
+  units: ["bps", "kbps", "Mbps", "Gbps"]
+  default_chart_type: "areaspline"
+
+# System Tools Settings
+system_tools:
+  enable_reboot_confirmation: true
+  enable_shutdown_confirmation: true
+  scheduler_page_size: 15
+
+# MikroTik API Settings
+mikrotik_api:
+  default_port: 8728
+  ssl_port: 8729
+  timeout_seconds: 10
+  attempts: 3
+  delay_seconds: 2
+
+# Security & Permissions
+security:
+  hide_sensitive_configs: true
+  protect_directories:
+    - "/config"
+    - "/core"
+    - "/sessions"

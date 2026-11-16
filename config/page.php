@@ -23,7 +23,7 @@ if($self[0] !== "index.php"  && $self[0] !==""){
     "get_log" => "get/get_dashboard.php",
     "get_livereport" => "get/get_dashboard.php",
     "get_livereport_disable" => "get/get_dashboard.php",
-    "get_traffic" => "get/get_dashboard.php",
+    "get_traffic" => "get/get_traffic.php",
     "get_hotspot_server" => "get/get_hotspot_server.php",
     "get_hotspot_active" => "get/get_hotspot_active.php",
     "get_hosts" => "get/get_hosts.php",

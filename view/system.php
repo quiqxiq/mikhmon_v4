@@ -22,22 +22,23 @@ if ($self[0] !== "index.php" && $self[0] !== "") {
                         <div class="card-header unselect">
                             <span><i class="fa fa-server"></i>&nbsp; <b>System Tools</b> &nbsp; </span>
                             <span class="card-tab card-tab-active" id="btn-tab-schedulers" onclick="switchSystemTab('schedulers')"><i class="fa fa-clock-o"></i> Scheduler</span>
-                            <span class="card-tab" id="btn-tab-power" onclick="switchSystemTab('power')"><i class="fa fa-power-off"></i> Power</span>
+                            <span class="card-tab" id="btn-tab-power" onclick="switchSystemTab('power')"><i class="fa fa-power-off"></i> Power Control</span>
+                            <span class="card-tab" id="btn-tab-sysinfo" onclick="switchSystemTab('sysinfo')"><i class="fa fa-info-circle"></i> System Resource</span>
                         </div>
                         <div class="card-body">
-                            <!-- Tab Schedulers -->
+                            <!-- Tab 1: Schedulers -->
                             <div id="panel-schedulers">
-                                <div class="btn-group btn-container">
+                                <div class="btn-group btn-container mr-b-10">
                                     <button class="bg-btn-group table-total" id="total-schedulers">&nbsp;</button>
-                                    <button class="bg-btn-group" onclick="loadSchedulers()" title="Force reload"><i class="fa fa-refresh" id="fr-schedulers"></i></button>
-                                    <input type="text" autocomplete="off" id="filter-schedulers" onkeyup="filterTable('schedulers','searchSchedulers',this.value)" placeholder="Filter" />
+                                    <button class="bg-btn-group" onclick="loadSchedulers('true')" title="Force reload"><i class="fa fa-refresh" id="fr-schedulers"></i></button>
+                                    <input type="text" autocomplete="off" id="filter-schedulers" onkeyup="filterTable('schedulers','searchSchedulers',this.value)" placeholder="Filter schedulers..." />
                                     <button class="bg-btn-group" onclick="filterTable('schedulers','filter-schedulers','')" title="Clear filter"><i class="fa fa-filter"></i></button>
                                 </div>
-                                <div class="card-fixed mr-t-10">
+                                <div class="card-fixed mr-t-10" style="max-height: 75vh; overflow-y: auto;">
                                     <table class="table table-bordered table-hover system-schedulers">
                                         <thead>
                                             <tr>
-                                                <th></th>
+                                                <th style="width: 70px; text-align:center;">Action</th>
                                                 <th>Name</th>
                                                 <th>Start Date</th>
                                                 <th>Start Time</th>
@@ -49,40 +50,66 @@ if ($self[0] !== "index.php" && $self[0] !== "") {
                                         </thead>
                                         <tbody id="schedulers" class="text-nowrap">
                                             <tr>
-                                                <td></td>
-                                                <td></td>
-                                                <td></td>
-                                                <td></td>
-                                                <td></td>
-                                                <td></td>
-                                                <td></td>
-                                                <td></td>
+                                                <td colspan="8" class="text-center">Loading Schedulers...</td>
                                             </tr>
                                         </tbody>
                                     </table>
                                 </div>
                             </div>
 
-                            <!-- Tab Power -->
+                            <!-- Tab 2: Power Control -->
                             <div id="panel-power" class="hide">
                                 <div class="row mr-t-10">
                                     <div class="col-6">
-                                        <div class="card" style="padding: 20px; border: 1px solid #ff9800; border-radius: 6px;">
-                                            <h3><i class="fa fa-refresh text-warning"></i> Reboot Router</h3>
-                                            <p>Restart router MikroTik secara halus (soft reboot). Semua sesi hotspot aktif akan terputus sementara hingga router selesai boot ulang.</p>
-                                            <button class="btn bg-warning" style="font-size: 15px; padding: 10px 20px;" onclick="confirmRouterPower('reboot')">
-                                                <i class="fa fa-refresh"></i> Reboot Router Now
-                                            </button>
+                                        <div class="card box-bordered pd-20" style="border-left: 5px solid #ff9800; border-radius: 6px;">
+                                            <div style="display:flex; align-items:center; margin-bottom:15px;">
+                                                <div style="width:50px; height:50px; border-radius:50%; background:rgba(255,152,0,0.15); display:flex; align-items:center; justify-content:center; margin-right:15px;">
+                                                    <i class="fa fa-refresh text-warning" style="font-size:26px;"></i>
+                                                </div>
+                                                <div>
+                                                    <h3 style="margin:0; font-size:18px;">Reboot Router</h3>
+                                                    <small class="text-muted">Soft restart router MikroTik</small>
+                                                </div>
+                                            </div>
+                                            <p style="font-size:13px; line-height:1.6; color:#555;">
+                                                Restart router MikroTik secara halus. Semua sesi hotspot aktif dan antrean traffic akan terputus sementara hingga router selesai melakukan booting ulang (biasanya 30-60 detik).
+                                            </p>
+                                            <div class="mr-t-20 text-right">
+                                                <button class="btn bg-warning" style="font-weight:bold; padding: 8px 16px;" onclick="confirmRouterPower('reboot')">
+                                                    <i class="fa fa-refresh"></i> Reboot Router Now
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                     <div class="col-6">
-                                        <div class="card" style="padding: 20px; border: 1px solid #f44336; border-radius: 6px;">
-                                            <h3><i class="fa fa-power-off text-danger"></i> Shutdown Router</h3>
-                                            <p>Mematikan router MikroTik secara aman. Pada RouterBOARD fisik, Anda harus menyalakan ulang tombol daya / power adaptor secara manual.</p>
-                                            <button class="btn bg-danger" style="font-size: 15px; padding: 10px 20px;" onclick="confirmRouterPower('shutdown')">
-                                                <i class="fa fa-power-off"></i> Shutdown Router Now
-                                            </button>
+                                        <div class="card box-bordered pd-20" style="border-left: 5px solid #f44336; border-radius: 6px;">
+                                            <div style="display:flex; align-items:center; margin-bottom:15px;">
+                                                <div style="width:50px; height:50px; border-radius:50%; background:rgba(244,67,54,0.15); display:flex; align-items:center; justify-content:center; margin-right:15px;">
+                                                    <i class="fa fa-power-off text-danger" style="font-size:26px;"></i>
+                                                </div>
+                                                <div>
+                                                    <h3 style="margin:0; font-size:18px;">Shutdown Router</h3>
+                                                    <small class="text-muted">Safely power off router</small>
+                                                </div>
+                                            </div>
+                                            <p style="font-size:13px; line-height:1.6; color:#555;">
+                                                Mematikan router MikroTik secara aman untuk mencegah kerusakan storage NAND/disk. Pada RouterBOARD fisik, Anda harus menyalakan saklar atau adaptor daya kembali secara manual.
+                                            </p>
+                                            <div class="mr-t-20 text-right">
+                                                <button class="btn bg-danger" style="font-weight:bold; padding: 8px 16px;" onclick="confirmRouterPower('shutdown')">
+                                                    <i class="fa fa-power-off"></i> Shutdown Router Now
+                                                </button>
+                                            </div>
                                         </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tab 3: System Resource / Info -->
+                            <div id="panel-sysinfo" class="hide">
+                                <div class="row mr-t-10" id="sysinfo_container">
+                                    <div class="col-12 text-center pd-20">
+                                        <i class="fa fa-circle-o-notch fa-spin"></i> Loading System Resources...
                                     </div>
                                 </div>
                             </div>
@@ -102,44 +129,49 @@ if ($self[0] !== "index.php" && $self[0] !== "") {
     ?>
         <div class="main-mobile">
             <div class="row">
-                <div style="margin-top:50px;margin-bottom:30px;">
+                <div style="margin-top:50px;margin-bottom:20px;">
                     <div class="group-icon-mobile" style="margin: auto; width:100%">
-                        <i class="fa fa-server" style="font-size:60px"></i>
+                        <i class="fa fa-server" style="font-size:50px"></i>
                         <h3>System Tools</h3>
                     </div>
                 </div>
                 <div class="col-12" style="margin-bottom:100px;">
                     <div class="mobile-card">
                         <div class="col-12 mr-b-10">
-                            <button class="btn-mobile bg-primary" onclick="switchSystemTab('schedulers')"><i class="fa fa-clock-o"></i> Scheduler</button>
-                            <button class="btn-mobile bg-danger" onclick="switchSystemTab('power')"><i class="fa fa-power-off"></i> Power</button>
+                            <button class="btn-mobile bg-primary" id="btn-m-tab-schedulers" onclick="switchSystemTab('schedulers')"><i class="fa fa-clock-o"></i> Scheduler</button>
+                            <button class="btn-mobile bg-btn-group" id="btn-m-tab-power" onclick="switchSystemTab('power')"><i class="fa fa-power-off"></i> Power</button>
+                            <button class="btn-mobile bg-btn-group" id="btn-m-tab-sysinfo" onclick="switchSystemTab('sysinfo')"><i class="fa fa-info-circle"></i> Info</button>
                         </div>
                         <div id="panel-schedulers">
-                            <div class="btn-group">
+                            <div class="btn-group mr-b-10">
                                 <button class="btn-mobile bg-btn-group table-total" id="total-schedulers">&nbsp;</button>
-                                <button class="btn-mobile bg-btn-group" onclick="loadSchedulers()" title="Force reload"><i class="fa fa-refresh" id="fr-schedulers"></i></button>
-                                <input type="text" autocomplete="off" id="filter-schedulers" onkeyup="filterTable('schedulers','searchSchedulers',this.value)" placeholder="Filter" />
+                                <button class="btn-mobile bg-btn-group" onclick="loadSchedulers('true')" title="Force reload"><i class="fa fa-refresh" id="fr-schedulers"></i></button>
+                                <input type="text" autocomplete="off" id="filter-schedulers" onkeyup="filterTable('schedulers','searchSchedulers',this.value)" placeholder="Filter..." />
                                 <button class="btn-mobile bg-btn-group" onclick="filterTable('schedulers','filter-schedulers','')" title="Clear filter"><i class="fa fa-filter"></i></button>
                             </div>
                             <div class="card-fixed mr-t-10">
-                                <hr>
                                 <table class="table-p0 system-schedulers">
                                     <tbody id="schedulers" class="text-nowrap">
-                                        <tr><td></td></tr>
+                                        <tr><td>Loading...</td></tr>
                                     </tbody>
                                 </table>
                             </div>
                         </div>
                         <div id="panel-power" class="hide mr-t-10">
-                            <div class="card mr-b-10" style="padding: 15px; border: 1px solid #ff9800;">
+                            <div class="card mr-b-10 pd-15" style="border-left: 4px solid #ff9800;">
                                 <h4><i class="fa fa-refresh text-warning"></i> Reboot Router</h4>
                                 <p style="font-size: 13px;">Restart router MikroTik secara halus.</p>
                                 <button class="btn-mobile bg-warning" onclick="confirmRouterPower('reboot')"><i class="fa fa-refresh"></i> Reboot Router</button>
                             </div>
-                            <div class="card" style="padding: 15px; border: 1px solid #f44336;">
+                            <div class="card pd-15" style="border-left: 4px solid #f44336;">
                                 <h4><i class="fa fa-power-off text-danger"></i> Shutdown Router</h4>
                                 <p style="font-size: 13px;">Mematikan router MikroTik secara aman.</p>
                                 <button class="btn-mobile bg-danger" onclick="confirmRouterPower('shutdown')"><i class="fa fa-power-off"></i> Shutdown Router</button>
+                            </div>
+                        </div>
+                        <div id="panel-sysinfo" class="hide mr-t-10">
+                            <div id="sysinfo_container">
+                                <!-- Mobile sysinfo populated by JS -->
                             </div>
                         </div>
                         <div class="card-footer"><span id="loading"></span></div>
