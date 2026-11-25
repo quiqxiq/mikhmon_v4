@@ -176,6 +176,7 @@ if (!isset($_SESSION["mikhmon"])) {
   <button class="btn bg-primary" title='Print' onclick="printV('qr','no');"><i class="fa fa-print"></i> <?= $_print_default ?></button>
   <button class="btn bg-primary" title='Print QR' onclick="printV('qr','yes');"><i class="fa fa-print"></i> <?= $_print_qr ?></button>
   <button class="btn bg-primary" title='Print Small'onclick="printV('small','yes');"><i class="fa fa-print"></i> <?= $_print_small ?></button>
+  <button class="btn bg-green" title='Print New' onclick="printV('tpl','new');"><i class="fa fa-print"></i> <?= $_print_new ?></button>
   </div>
 </div>
 <div class="overflow mr-t-10 box-bordered" style="max-height: 75vh">

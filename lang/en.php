@@ -85,6 +85,7 @@ $_print_default = "Default";
 $_print = "Print";
 $_print_qr = "QR";
 $_print_small = "Small";
+$_print_new = "New";
 $_processing = "Processing...";
 $_profile = "Profile";
 $_qty = "Qty";

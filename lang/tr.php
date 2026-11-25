@@ -85,6 +85,7 @@ $_print_default = "Varsayılan";
 $_print = "Yazdır";
 $_print_qr = "QR";
 $_print_small = "Küçük";
+$_print_new = "Yeni";
 $_processing = "İşleniyor ...";
 $_profile = "Profil";
 $_qty = "Miktar";

@@ -40,6 +40,7 @@ if (!isset($_SESSION["mikhmon"])) {
   $id = isset($_GET['id']) ? $_GET['id'] : '';
   $qr = isset($_GET['qr']) ? $_GET['qr'] : '';
   $small = isset($_GET['small']) ? $_GET['small'] : '';
+  $tpl = isset($_GET['tpl']) ? $_GET['tpl'] : '';
   $userp = isset($_GET['user']) ? $_GET['user'] : '';
 
   include_once('../lib/routeros_api.class.php');
@@ -168,6 +169,7 @@ table.voucher {
   $username = $regtable['name'];
   $password = $regtable['password'];
   $profile = $regtable['profile'];
+  $server = isset($regtable['server']) ? (string)$regtable['server'] : '';
   $timelimit = $regtable['limit-uptime'];
   $getdatalimit = $regtable['limit-bytes-total'];
   $comment = $regtable['comment'];
@@ -200,6 +202,8 @@ if ($userp != "") {
 } else {
   if ($small == "yes") {
     include('./template-small.php');
+  } elseif ($tpl == "new") {
+    include('./template-new.php');
   } else {
     include('./template.php');
   }

@@ -85,6 +85,7 @@ $_print_default = "Por Defecto";
 $_print = "Imprimir";
 $_print_qr = "QR";
 $_print_small = "Pequeña";
+$_print_new = "Nueva";
 $_processing = "Procesando...";
 $_profile = "Perfil";
 $_qty = "Cantidad";

@@ -40,6 +40,10 @@
 <?php 
 } ?>
 <!-- /  -->
+        <tr>
+          <!-- Server  -->
+          <td colspan="2" style="font-size:11px">Server: <?= htmlspecialchars((string)($server ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+        </tr>
         </table>
       </td>
     </tr>
