@@ -370,6 +370,17 @@ if (file_exists('./info.php')) { include('./info.php'); }
   <!--cookies-->
    <a href="./?hotspot=cookies&session=<?= $session; ?>" class="menu <?= $scookies; ?>"><i class=" fa fa-hourglass"></i> <?= $_hotspot_cookies ?></a>
   </div>
+  <!--secrets--> 
+  <div class="dropdown-btn <?= $ssecrets; ?>"><i class="fa fa-users"></i> PPPOE Server
+    <i class="fa fa-caret-down"></i>
+  </div>
+  <div class="dropdown-container <?= $pppmenu; ?>">
+    <a href="./?ppp=secrets&profile=all&session=<?= $session; ?>" class="<?= $ssecrets; ?>"> &nbsp;&nbsp;&nbsp;<i class="fa fa-list "></i> <?= $_ppp_secrets ?> </a>
+    <a href="./?ppp=addsecret&session=<?= $session; ?>" class="<?= $ssecrets; ?>"> &nbsp;&nbsp;&nbsp;<i class="fa fa-user-plus "></i> Add Secrets</a>
+    <a href="./?ppp=active&session=<?= $session; ?>" class="<?= $spactive; ?>"> &nbsp;&nbsp;&nbsp;<i class="fa fa-wifi"></i> <?= $_ppp_active ?></a>
+    <a href="./?ppp=profiles&session=<?= $session; ?>" class="<?= $spprofile; ?>"> &nbsp;&nbsp;&nbsp;<i class="fa fa-list "></i> <?= $_ppp_profiles ?> </a>
+    <a href="./?ppp=add-profile&session=<?= $session; ?>"> &nbsp;&nbsp;&nbsp;<i class="fa fa-user-plus "></i> Add PPP Profile</a>
+  </div>
   <!--quick print-->
   <a href="./?hotspot=quick-print&session=<?= $session; ?>" class="menu <?= $squick; ?>"> <i class="fa fa-print"></i> <?= $_quick_print ?> </a>
   <!--vouchers-->

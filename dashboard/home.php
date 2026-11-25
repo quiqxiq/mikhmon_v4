@@ -72,6 +72,18 @@ if (!isset($_SESSION["mikhmon"])) {
     $hunit = "items";
   }
 
+// get & counting ppp profiles
+  $countprofiles = count($API->comm("/ppp/profile/print"));
+  $profunit = ($countprofiles < 2) ? "item" : "items";
+
+// get & counting ppp secrets
+  $countsecrets = count($API->comm("/ppp/secret/print"));
+  $seunit = ($countsecrets < 2) ? "item" : "items";
+
+// get & counting ppp active
+  $countpppactive = count($API->comm("/ppp/active/print"));
+  $activeunit = ($countpppactive < 2) ? "item" : "items";
+
   if ($livereport == "disable") {
     $logh = "457px";
     $lreport = "style='display:none;'";
@@ -244,6 +256,51 @@ if (!isset($_SESSION["mikhmon"])) {
               </div>
             </div>
           </div>
+          </div>
+		  <div id="r_2" class="row">
+			<div class="card">
+				<div class="card-header"><h3><i class="fa fa-wifi"></i> PPP</h3></div>
+				<div class="card-body">
+					<div class="row">
+						<div class="col-4 col-box-6">
+							<div class="box bg-blue bmh-75">
+								<a onclick="cancelPage()" href="./?ppp=active&session=<?= $session; ?>">
+									<h1><?= $countpppactive; ?>
+										<span style="font-size: 15px;"><?= $activeunit; ?></span>
+									</h1>
+									<div>
+										<i class="fa fa-laptop"></i> <?= $_ppp_active ?>
+									</div>
+								</a>
+							</div>
+						</div>
+						<div class="col-4 col-box-6">
+							<div class="box bg-green bmh-75">
+								<a onclick="cancelPage()" href="./?ppp=profiles&session=<?= $session; ?>">
+									<h1><?= $countprofiles; ?>
+										<span style="font-size: 15px;"><?= $profunit; ?></span>
+									</h1>
+									<div>
+										<i class="fa fa-users"></i> <?= $_ppp_profiles ?>
+									</div>
+								</a>
+							</div>
+						</div>
+						<div class="col-4 col-box-6">
+							<div class="box bg-yellow bmh-75">
+								<a onclick="cancelPage()" href="./?ppp=secrets&session=<?= $session; ?>">
+									<h1><?= $countsecrets; ?>
+										<span style="font-size: 15px;"><?= $seunit; ?></span>
+									</h1>
+									<div>
+										<i class="fa fa-user-secret"></i> <?= $_ppp_secrets ?>
+									</div>
+								</a>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
           </div>
             <div class="card">
               <div class="card-header"><h3><i class="fa fa-area-chart"></i> <?= $_traffic ?> </h3></div>

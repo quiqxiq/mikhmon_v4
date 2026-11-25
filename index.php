@@ -103,6 +103,10 @@ if (!isset($_SESSION["mikhmon"])) {
   $macbinding = $_GET['mac'];
   $ipbinding = $_GET['addr'];
   $ppp = $_GET['ppp'];
+  $page = isset($page) ? $page : (isset($_GET['page']) ? (int)$_GET['page'] : 1);
+  if ($page < 1) {
+    $page = 1;
+  }
   $secretbyname = $_GET['secret'];
   $enablesecr = $_GET['enable-pppsecret'];
   $disablesecr = $_GET['disable-pppsecret'];
