@@ -1,8 +1,6 @@
 <?php 
 if (isset($_SERVER["REQUEST_URI"]) && substr($_SERVER["REQUEST_URI"], -10) == "config.php") { header("Location:./"); exit; } 
 $data['mikhmon'] = array ('1'=>'mikhmon<|<mikhmon','mikhmon>|>aWNlbA==');
-$data['session315'] = array ('1'=>'session315!192.168.122.60:8728','session315@|@admin','session315#|#qmFirA==','session315%TES-ROS6.48','session315^10.10.6.1','session315&Rp','session315*','session315(','session315)','session315=30','session315@!@disable','session315#!#');
-$data['session873'] = array ('1'=>'session873!192.168.122.26:8728','session873@|@admin','session873#|#qmFirA==','session873%TES-ROS7.22','session873^10.10.7.1','session873&Rp','session873*','session873(','session873)','session873=30','session873@!@disable','session873#!#');
-$data['session567'] = array ('1'=>'session567!192.168.122.189:8728','session567@|@admin','session567#|#qmFirA==','session567%TES-ROS7.24','session567^10.10.8.1','session567&Rp','session567*','session567(','session567)','session567=30','session567@!@disable','session567#!#');
-
-$data['livebarokah'] = array ('1'=>'livebarokah!103.147.134.201:1436','livebarokah@|@99barokah99','livebarokah#|#q6OUmaOho5KacWo=','livebarokah%BAROKAH-HOTSPOT','livebarokah^barokah.net','livebarokah&Rp','livebarokah*10','livebarokah(1','livebarokah)','livebarokah=10','livebarokah@!@enable');
+$data['BAROKAH_NET'] = array ('1'=>'BAROKAH_NET!103.139.193.128:1257','BAROKAH_NET@|@mikhmon','BAROKAH_NET#|#aWJk','BAROKAH_NET%BAROKAH-NET','BAROKAH_NET^barokah.samatan','BAROKAH_NET&Rp','BAROKAH_NET*10','BAROKAH_NET(9','BAROKAH_NET)','BAROKAH_NET=10','BAROKAH_NET@!@enable');
+$data['BAROKAH-TOK'] = array ('1'=>'BAROKAH-TOK!103.139.193.128:1302','BAROKAH-TOK@|@008','BAROKAH-TOK#|#aGFj','BAROKAH-TOK%barokah.com','BAROKAH-TOK^barokah.tok','BAROKAH-TOK&Rp','BAROKAH-TOK*10','BAROKAH-TOK(1','BAROKAH-TOK)','BAROKAH-TOK=10','BAROKAH-TOK@!@enable');
+$data['NEW-BAROKAH'] = array ('1'=>'NEW-BAROKAH!103.139.193.128:1069','NEW-BAROKAH@|@mimon','NEW-BAROKAH#|#aWI=','NEW-BAROKAH%BAROKAH','NEW-BAROKAH^barokah.sr','NEW-BAROKAH&Rp','NEW-BAROKAH*10','NEW-BAROKAH(2','NEW-BAROKAH)','NEW-BAROKAH=10','NEW-BAROKAH@!@enable');

@@ -72,26 +72,132 @@ if (!isset($_SESSION["mikhmon"])) {
     $hunit = "items";
   }
 
+// get hotspot server list & count active per server
+  $gethotspotservers = $API->comm("/ip/hotspot/print");
+  $serverStats = array();
+  foreach ($gethotspotservers as $srv) {
+    $srvName = $srv['name'];
+    $srvActive = $API->comm("/ip/hotspot/active/print", array(
+      "count-only" => "",
+      "?server" => $srvName,
+    ));
+    $serverStats[] = array(
+      'name'   => $srvName,
+      'active' => (int)$srvActive,
+    );
+  }
+
   if ($livereport == "disable") {
     $logh = "457px";
     $lreport = "style='display:none;'";
   } else {
     $logh = "350px";
     $lreport = "style='display:block;'";
-    // Pre-calculate income directly from SQLite DB (DB-first, instantaneous <0.04s)
+    // Live report stats: DB-first (instantaneous), fallback to Mikrotik scripts when DB is empty (like report/selling.php)
     include_once('./include/mikhmon_records.php');
     include_once('./lib/sessions_store.php');
-    $stats_home = mikhmon_sales_stats($session);
+    $db_count = mikhmon_sales_count($session);
+    $use_router = ($db_count == 0);
+    if ($use_router) {
+      $stats_home = mikhmon_scripts_stats(mikhmon_scripts_all($API));
+    } else {
+      $stats_home = mikhmon_sales_stats($session);
+    }
     $indo_currencies = (isset($cekindo['indo']) && is_array($cekindo['indo']))
       ? $cekindo['indo']
       : array('RP', 'Rp', 'rp', 'IDR', 'idr', 'RP.', 'Rp.', 'rp.', 'IDR.', 'idr.');
     $price_decimals = in_array((string)(isset($currency) ? $currency : 'Rp'), $indo_currencies) ? 0 : 2;
     $_SESSION[$session.'totalHr'] = $stats_home['today_count'];
-    $_SESSION[$session.'dincome'] = number_format($stats_home['today_sum'], $price_decimals, ',', '.');
+    $_SESSION[$session.'dincome'] = number_format((float)$stats_home['today_sum'], $price_decimals, ',', '.');
     $_SESSION[$session.'totalBl'] = $stats_home['month_count'];
-    $_SESSION[$session.'mincome'] = number_format($stats_home['month_sum'], $price_decimals, ',', '.');
+    $_SESSION[$session.'mincome'] = number_format((float)$stats_home['month_sum'], $price_decimals, ',', '.');
     $_SESSION[$session.'idhr'] = isset($clock['date']) ? $clock['date'] : date('M/d/Y');
   }
+
+  // Sales per server (manual join: hotspot users by server -> name -> sales by username)
+  include_once('./include/mikhmon_records.php');
+  include_once('./lib/sessions_store.php');
+  $salesServerStats = array();
+  $salesUsers = array();
+  $thisBucket2 = strtolower(date("M")) . date("Y");
+  $spr_today = array(strtolower(date("M")) . "/" . date("d") . "/" . date("Y"), date("Y-m-d"));
+  $use_router2 = isset($use_router) ? $use_router : (mikhmon_sales_count($session) == 0);
+  if ($use_router2) {
+    foreach (mikhmon_scripts_all($API) as $r) {
+      $f = mikhmon_script_parse(isset($r['name']) ? (string)$r['name'] : '');
+      $uname = isset($f[2]) ? trim((string)$f[2]) : '';
+      if ($uname === '') { continue; }
+      $salesUsers[$uname][] = array('date' => trim((string)$f[0]), 'price' => (float)$f[3]);
+    }
+  } else {
+    foreach (mikhmon_sales_find($session) as $r) {
+      $uname = isset($r['c_username']) ? trim((string)$r['c_username']) : '';
+      if ($uname === '') { continue; }
+      $salesUsers[$uname][] = array(
+        'date' => isset($r['c_date']) ? trim((string)$r['c_date']) : '',
+        'price' => (float)(isset($r['c_price']) ? $r['c_price'] : 0),
+      );
+    }
+  }
+  // Map every hotspot user to its server in one print. Filtering users with
+  // ?server=<name> misses users whose server is "all" (the RouterOS default),
+  // which made every per-server total zero.
+  $userServer = array();
+  $salesServers = array();
+  foreach ($gethotspotservers as $srv) {
+    $srvName = isset($srv['name']) ? trim((string)$srv['name']) : '';
+    if ($srvName === '' || isset($salesServers[$srvName])) { continue; }
+    $salesServers[$srvName] = array(
+      'name' => $srvName,
+      'today_count' => 0,
+      'today_sum' => 0.0,
+      'month_count' => 0,
+      'month_sum' => 0.0,
+    );
+  }
+  $getuserserver = $API->comm("/ip/hotspot/user/print", array(".proplist" => "name,server"));
+  if (is_array($getuserserver)) {
+    foreach ($getuserserver as $hu) {
+      $uname = isset($hu['name']) ? trim((string)$hu['name']) : '';
+      if ($uname === '') { continue; }
+      $userServer[$uname] = (isset($hu['server']) && trim((string)$hu['server']) !== '')
+        ? trim((string)$hu['server'])
+        : 'all';
+    }
+  }
+  foreach ($salesUsers as $uname => $sales) {
+    if (!isset($userServer[$uname])) { continue; }
+    $sv = $userServer[$uname];
+    if (!isset($salesServers[$sv])) {
+      $salesServers[$sv] = array(
+        'name' => $sv,
+        'today_count' => 0,
+        'today_sum' => 0.0,
+        'month_count' => 0,
+        'month_sum' => 0.0,
+      );
+    }
+    foreach ($sales as $sale) {
+      $d = (string)$sale['date'];
+      $pr = (float)$sale['price'];
+      if (in_array($d, $spr_today, true)) {
+        $salesServers[$sv]['today_count']++;
+        $salesServers[$sv]['today_sum'] += $pr;
+      }
+      if ($d !== '' && mikhmon_script_month($d) === $thisBucket2) {
+        $salesServers[$sv]['month_count']++;
+        $salesServers[$sv]['month_sum'] += $pr;
+      }
+    }
+  }
+  $salesServerStats = array_values($salesServers);
+  $spr_indo = (isset($cekindo['indo']) && is_array($cekindo['indo']))
+      ? $cekindo['indo']
+      : array('RP', 'Rp', 'rp', 'IDR', 'idr', 'RP.', 'Rp.', 'rp.', 'IDR.', 'idr.');
+  $spr_decimals = in_array((string)(isset($currency) ? $currency : 'Rp'), $spr_indo) ? 0 : 2;
+  $spr_fmt = function ($v) use ($currency, $spr_decimals) {
+    return $currency . ' ' . number_format((float)$v, $spr_decimals, ',', '.');
+  };
 /*
 // get selling report
     $thisD = date("d");
@@ -244,6 +350,61 @@ if (!isset($_SESSION["mikhmon"])) {
               </div>
             </div>
           </div>
+          </div>
+          <?php if (!empty($serverStats)) { ?>
+          <div class="card" style="margin-top:10px;">
+            <div class="card-header"><h3><i class="fa fa-server"></i> Hotspot Active Per Server</h3></div>
+            <div class="card-body">
+              <div class="row" style="display: flex; flex-wrap: wrap;">
+              <?php
+              $colors = ['bg-blue', 'bg-green', 'bg-yellow', 'bg-red'];
+              foreach ($serverStats as $idx => $srv) {
+                $sActive = $srv['active'];
+                $sName   = $srv['name'];
+                $bgColor = $colors[$idx % count($colors)];
+              ?>
+                <div class="col-3 col-box-6" style="display: flex; flex-grow: 1;">
+                  <div class="box <?= $bgColor ?> bmh-75" style="width: 100%;">
+                    <a onclick="cancelPage()" href="./?hotspot=active&server=<?= urlencode($sName) ?>&session=<?= $session ?>" style="height: 100%; display: flex; flex-direction: column; justify-content: center; text-decoration: none;">
+                      <div style="font-size:12px; font-weight:bold; margin-bottom: 5px;">
+                        <i class="fa fa-server"></i> <?= htmlspecialchars($sName) ?>
+                      </div>
+                      <h1 style="margin: 0;"><?= $sActive ?></h1>
+                      <div style="font-size:12px; margin-top: 5px;"><i class="fa fa-laptop"></i> Active</div>
+                    </a>
+                  </div>
+                </div>
+              <?php } ?>
+              </div>
+            </div>
+          </div>
+          <?php } ?>
+          <div class="card" style="margin-top:10px;">
+            <div class="card-header"><h3><i class="fa fa-money"></i> Sales Per Server</h3></div>
+            <div class="card-body">
+              <div class="row">
+              <?php
+              $scolors = array('bg-blue', 'bg-green', 'bg-yellow', 'bg-red');
+              foreach ($salesServerStats as $sidx => $ss) {
+                $sbg = $scolors[$sidx % count($scolors)];
+              ?>
+                <div class="col-4 col-box-6">
+                  <div class="box <?= $sbg ?> bmh-75">
+                    <a onclick="cancelPage()" href="./?hotspot=users&session=<?= $session; ?>" title="Lihat voucher server <?= htmlspecialchars($ss['name']); ?>">
+                      <h1><?= number_format($ss['today_count'], 0, ',', '.'); ?>
+                        <span style="font-size: 15px;">voucher</span>
+                      </h1>
+                      <div><i class="fa fa-money"></i> <?= $spr_fmt($ss['today_sum']); ?> <small>Today</small></div>
+                      <div style="font-size:12px; margin-top:5px;"><i class="fa fa-server"></i> <?= htmlspecialchars($ss['name']); ?> · This month: <b><?= number_format($ss['month_count'], 0, ',', '.'); ?></b> voucher — <?= $spr_fmt($ss['month_sum']); ?></div>
+                    </a>
+                  </div>
+                </div>
+              <?php } ?>
+              <?php if (empty($salesServerStats)) { ?>
+                <div class="col-12" style="padding:10px;">-</div>
+              <?php } ?>
+              </div>
+            </div>
           </div>
             <div class="card">
               <div class="card-header"><h3><i class="fa fa-area-chart"></i> <?= $_traffic ?> </h3></div>
