@@ -10,9 +10,16 @@
 > installation, fiber-optic cabling, and web development.
 > Website: https://www.ghaib.net/
 
-This branch: **feat/report-sqlite-ui**  
+This branch: **99barokah**  
 Version: **4.0.0** — updated 2026-11-26  
 License: **GPLv2** (original Mikhmon by Laksamadi Guko)
+
+## Fitur branch 99barokah
+
+- Modul PPP: secrets, profiles, active, dan form tambah/edit.
+- Auto-isolir berbasis komentar `ISOLIR:<profile>:<interval>` dan scheduler.
+- Kartu PPP Active/Profiles/Secrets di dashboard.
+- Semua fitur base: laporan SQLite, server tracking, filter, UI responsif, dan cache performa.
 
 ## Fitur utama edisi ini
 

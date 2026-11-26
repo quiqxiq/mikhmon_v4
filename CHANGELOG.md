@@ -6,6 +6,14 @@ Developer: **quiqxiq**.
 
 ## [4.0.0] — 2026-11-26
 
+### Branch `99barokah`
+
+- PPP module: secrets, profiles, active connections, and add/edit forms.
+- Auto-isolir: scheduler and on-up integration with
+  `ISOLIR:<profile>:<interval>` comments.
+- PPP Active/Profiles/Secrets dashboard cards.
+- Base report, server tracking, responsive UI, and performance cache.
+
 ### Base edition (`feat/report-sqlite-ui`)
 
 - SQLite-backed sales report with pagination, search, date/month/server
