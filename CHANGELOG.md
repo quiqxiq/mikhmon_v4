@@ -6,6 +6,14 @@ Developer: **quiqxiq**.
 
 ## [4.0.0] — 2026-11-26
 
+### Branch `parto`
+
+- Server-aware small voucher template.
+- New voucher templates (`default-new.php`, `template-new.php`) and
+  localized **Print New / Baru** button.
+- Per-server sales/income and active-user dashboard cards.
+- Base report, server tracking, responsive UI, and performance cache.
+
 ### Base edition (`feat/report-sqlite-ui`)
 
 - SQLite-backed sales report with pagination, search, date/month/server

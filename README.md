@@ -10,9 +10,16 @@
 > installation, fiber-optic cabling, and web development.
 > Website: https://www.ghaib.net/
 
-This branch: **feat/report-sqlite-ui**  
+This branch: **parto**  
 Version: **4.0.0** — updated 2026-11-26  
 License: **GPLv2** (original Mikhmon by Laksamadi Guko)
+
+## Fitur branch parto
+
+- Template voucher small dengan informasi server.
+- Template voucher baru (`default-new.php`, `template-new.php`).
+- Button **Print New / Baru** dengan label mengikuti bahasa.
+- Laporan penjualan per-server dan dashboard server.
 
 ## Fitur utama edisi ini
 
