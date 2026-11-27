@@ -263,6 +263,12 @@ if ($currency == in_array($currency, $cekindo['indo'])) {
 	if($qrbt == "enable"){$qr = "yes";}	
 	include('../voucher/printbt.php');
 ?>
+<div class="pd-10" style="text-align:center;">
+  <a class="btn bg-secondary" title="Print" href="./voucher/print.php?user=<?= $usermode ?>-<?= $uname ?>&qr=no&server=<?= urlencode((string)$server); ?>&session=<?= $session; ?>" target="_blank"> <i class="fa fa-print"></i> <?= $_print_default ?></a>
+  <a class="btn bg-danger" title="Print QR" href="./voucher/print.php?user=<?= $usermode ?>-<?= $uname ?>&qr=yes&server=<?= urlencode((string)$server); ?>&session=<?= $session; ?>" target="_blank"> <i class="fa fa-qrcode"></i> <?= $_print_qr ?></a>
+  <a class="btn bg-info" title="Print Small" href="./voucher/print.php?user=<?= $usermode ?>-<?= $uname ?>&small=yes&server=<?= urlencode((string)$server); ?>&session=<?= $session; ?>" target="_blank"> <i class="fa fa-print"></i> <?= $_print_small ?></a>
+  <a class="btn bg-green" title="Print New" href="./voucher/print.php?user=<?= $usermode ?>-<?= $uname ?>&tpl=new&server=<?= urlencode((string)$server); ?>&session=<?= $session; ?>" target="_blank"> <i class="fa fa-print"></i> <?= $_print_new ?></a>
+</div>
 
 <script>
     $(document).ready(function(){

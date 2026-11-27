@@ -42,6 +42,7 @@ if (!isset($_SESSION["mikhmon"])) {
   $small = isset($_GET['small']) ? $_GET['small'] : '';
   $tpl = isset($_GET['tpl']) ? $_GET['tpl'] : '';
   $userp = isset($_GET['user']) ? $_GET['user'] : '';
+  $serverFilter = isset($_GET['server']) ? (string)$_GET['server'] : '';
 
   include_once('../lib/routeros_api.class.php');
   $API = new RouterosAPI();
@@ -68,7 +69,11 @@ if (!isset($_SESSION["mikhmon"])) {
     $TotalReg = count($getuser);
   } elseif ($id != "") {
     $usermode = explode('-', $id)[0];
-    $getuser = $API->comm('/ip/hotspot/user/print', array("?comment" => "$id", "?uptime" => "0s"));
+    $printQuery = array("?comment" => "$id", "?uptime" => "0s");
+    if ($serverFilter !== '' && $serverFilter !== 'all') {
+      $printQuery['?server'] = $serverFilter;
+    }
+    $getuser = $API->comm('/ip/hotspot/user/print', $printQuery);
     $TotalReg = count($getuser);
   }
   $getuprofile = isset($getuser[0]['profile']) ? $getuser[0]['profile'] : '';
