@@ -303,10 +303,6 @@ if (!isset($_SESSION["mikhmon"])) {
 				</div>
 			</div>
           </div>
-            <div id="mmServerCards" class="card" style="margin-top:10px;">
-              <div class="card-header"><h3><i class="fa fa-server"></i> Per Server</h3></div>
-              <div class="card-body"><span class="mm-muted"><i class="fa fa-circle-o-notch fa-spin"></i> Memuat data server...</span></div>
-            </div>
             <div class="card">
               <div class="card-header"><h3><i class="fa fa-area-chart"></i> <?= $_traffic ?> </h3></div>
 
@@ -509,17 +505,3 @@ if (!isset($_SESSION["mikhmon"])) {
             </div>
 </div>
 </div>
-
-<script>
-(function () {
-  var el = document.getElementById('mmServerCards');
-  if (!el) { return; }
-  var mmSession = <?= json_encode((string)$session, JSON_UNESCAPED_SLASHES); ?>;
-  fetch('./dashboard/aload.php?load=servers&session=' + encodeURIComponent(mmSession), {credentials: 'same-origin'})
-    .then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.text(); })
-    .then(function (html) { el.outerHTML = html; })
-    .catch(function () {
-      el.innerHTML = '<div class="card-header"><h3><i class="fa fa-server"></i> Per Server</h3></div><div class="card-body"><span class="text-red">Data server gagal dimuat. <a href="?session=' + encodeURIComponent(mmSession) + '&refresh=1">Coba lagi</a></span></div>';
-    });
-})();
-</script>
